@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>the-storage</title>
+  <script src="https://unpkg.com/vue@next"></script>
+  <script type="module">
+    const vm = Vue.createApp({
+      data() {
+        return {
+          test: '1'
+        }
+      }
+    }).mount('#app')
+  </script>
+  <script type="module">
+    import { createLocal } from './src/index.js'
+    const local = createLocal({patchOrigin: true})
+    window.local = local
+  </script>
+</head>
+
+<body>
+  <div id="app">
+    {{ test }}
+  </div>
+</body>
+
+</html>

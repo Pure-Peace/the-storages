@@ -1,0 +1,35 @@
+{
+  "name": "the-storages",
+  "version": "1.0.0",
+  "description": "An enhanced localstorage and sessionstorage plugin. Provide storage event monitoring and async/sync api.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pure-peace/the-storages"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "lint": "eslint ./src/*",
+    "doc": "jsdoc ./src/* -d ./doc",
+    "dev": "snowpack dev"
+  },
+  "keywords": [
+    "localStorage",
+    "sessionStorage",
+    "storage",
+    "listener",
+    "event",
+    "async"
+  ],
+  "author": "Pure-Peace",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^7.9.0",
+    "eslint-config-standard": "^14.1.1",
+    "eslint-plugin-import": "^2.22.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-standard": "^4.0.1",
+    "jsdoc": "^3.6.6",
+    "snowpack": "^2.11.1"
+  }
+}
