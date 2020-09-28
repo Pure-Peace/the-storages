@@ -25,7 +25,8 @@ class Storage {
       _notNull,
       _recursionObject,
       _asyncWrapper,
-      _createObject
+      _createObject,
+      _zip
     } = this
 
     // original functions
@@ -51,7 +52,7 @@ class Storage {
     const methods = {
       // dispatch ACTIVE event
       _event (type, data) {
-        if (typeof (this._active[type.split('_')[1]]) === 'function') {
+        if (typeof this._active[type.split('_')[1]] === 'function') {
           window.dispatchEvent(Object.assign(
             new Event(type), { ...data, storageArea: storage, url: window.location.href }
           ))
@@ -60,32 +61,82 @@ class Storage {
 
       // rewrite functions of prototype
       getItem (key, parse = true) {
-        _typeCheck(key)
-        const originVal = getItem.call(this, key)
-        const value = parse ? _parse(originVal) : originVal
-        this._event(`${type}_get`, {
+        const getValue = (_key) => {
+          const originVal = getItem.call(this, _key)
+          return parse ? _parse(originVal) : originVal
+        }
+        const getEvent = (value) => this._event(`${type}_get`, {
           key, newValue: value, oldValue: value
         })
-        return value
+        // multple key handle
+        if (key.constructor === Array) {
+          const value = key.reduce((acc, _key) => {
+            acc[_key] = getValue(_key)
+            return acc
+          }, {})
+          getEvent(value)
+          return value
+        // single key handle
+        } else if (_typeCheck(key)) {
+          const value = getValue(key)
+          getEvent(value)
+          return value
+        }
       },
 
       setItem (key, value) {
-        _typeCheck(key)
-        const oldValue = _parse(getItem.call(this, key))
-        setItem.call(this, key, _stringify(value))
-        this._event(`${type}_set`, {
-          key, newValue: value, oldValue
+        const getValue = (_key) => _parse(getItem.call(this, _key))
+        const setValue = (_key, _value) => setItem.call(this, _key, _stringify(_value))
+        const setEvent = (newValue, oldValue) => this._event(`${type}_set`, {
+          key, newValue, oldValue
         })
+        const objectHandle = (object) => {
+          const oldValue = Object.keys(object).reduce((acc, _key) => {
+            acc[_key] = getValue(_key)
+            setValue(_key, object[_key])
+            return acc
+          }, {})
+          setEvent(object, oldValue)
+          return object
+        }
+        // key is an object
+        if (key.constructor === Object) {
+          return objectHandle(key)
+        } else if (key.constructor === Array && value.constructor === Array) {
+          // key is a list, value must be a list too
+          return objectHandle(_zip(key, value))
+        } else if (_typeCheck(key)) {
+          // single key and value
+          const oldValue = _parse(getItem.call(this, key))
+          setValue(key, value)
+          setEvent(value, oldValue)
+          return value
+        }
+        _typeCheck(key)
         return value
       },
 
-      removeItem  (key) {
-        _typeCheck(key)
-        const oldValue = getItem.call(this, key)
-        removeItem.call(this, key)
-        this._event(`${type}_remove`, {
+      removeItem  (key, pop = false) {
+        const getValue = (_key) => _parse(getItem.call(this, _key))
+        const remove = (_key) => removeItem.call(this, _key)
+        const removeEvent = (oldValue) => this._event(`${type}_${pop ? 'pop' : 'remove'}`, {
           key, newValue: null, oldValue
         })
+        // multple key handle
+        if (key.constructor === Array) {
+          const oldValue = key.reduce((acc, _key) => {
+            acc[_key] = getValue(_key)
+            remove(_key)
+            return acc
+          }, {})
+          removeEvent(oldValue)
+          if (pop) return oldValue
+        // single key handle
+        } else if (_typeCheck(key)) {
+          const oldValue = getValue(key)
+          removeEvent(oldValue)
+          if (pop) return oldValue
+        }
       },
 
       clear () {
@@ -93,17 +144,6 @@ class Storage {
         this._event(`${type}_clear`, {
           key: null, newValue: null, oldValue: null
         })
-      },
-
-      pop  (key, parse = true) {
-        _typeCheck(key)
-        const originVal = getItem.call(this, key)
-        const oldValue = parse ? _parse(originVal) : originVal
-        removeItem.call(this, key)
-        this._event(`${type}_pop`, {
-          key, newValue: null, oldValue
-        })
-        return oldValue
       },
 
       setChain (keyChain, value) {
@@ -144,7 +184,7 @@ class Storage {
         if (typeof handler !== 'function') {
           throw new TypeError(`watch handler must be a function, not ${typeof handler}`)
         }
-        this[triggerType][eventType] = handler
+        this[`_${triggerType}`][eventType] = handler
       },
 
       // remove event watcher
@@ -159,10 +199,12 @@ class Storage {
       get: methods.getItem,
       set: methods.setItem,
       remove: methods.removeItem,
-      watchActive: (eventType, handler) => methods.watch('active', eventType, handler),
-      watchPassive: (eventType, handler) => methods.watch('passive', eventType, handler),
-      unwatchActive: eventType => methods.unwatch('active', eventType),
-      unwatchPassive: eventType => methods.unwatch('passive', eventType)
+      getItems: (...keys) => storage.getItem(keys),
+      pop: (key) => storage.removeItem(key, true),
+      watchActive: (eventType, handler) => storage.watch('active', eventType, handler),
+      watchPassive: (eventType, handler) => storage.watch('passive', eventType, handler),
+      unwatchActive: eventType => storage.unwatch('active', eventType),
+      unwatchPassive: eventType => storage.unwatch('passive', eventType)
     }
 
     const vaildEvents = {
@@ -171,8 +213,8 @@ class Storage {
     }
 
     const triggers = {
-      active: Object.seal(_createObject(vaildEvents._activeEvents)),
-      passive: Object.seal(_createObject(vaildEvents._passiveEvents))
+      _active: Object.seal(_createObject(vaildEvents._activeEvents)),
+      _passive: Object.seal(_createObject(vaildEvents._passiveEvents))
     }
 
     // set methods
@@ -213,19 +255,15 @@ class Storage {
         const parse = (storageEvent, ...props) => props.forEach(
           prop => Object.defineProperty(storageEvent, prop, { value: _parse(storageEvent[prop]) })
         )
-
         if ([e.key, e.newValue, e.oldValue].every(i => i === null)) {
           // on clear
-
           _storage._passive.clear && _storage._passive.clear(e)
         } else if (e.key !== null && e.newValue !== null) {
           // on set
-
           parse(e, 'newValue', 'oldValue')
           _storage._passive.set && _storage._passive.set(e)
         } else if (e.key !== null && e.newValue === null) {
           // on remove
-
           parse(e, 'newValue', 'oldValue')
           _storage._passive.remove && _storage._passive.remove(e)
         }
@@ -273,7 +311,7 @@ class Storage {
           }
         },
         set: (target, key, value) => {
-          storage.setChain(`${keyChain}.${key}`, value)
+          storage.setChain(`${target._key}.${key}`, value)
         }
       })
     }
@@ -282,6 +320,12 @@ class Storage {
     // // the effective position is [the first] recursive call of the storage: storage.[b].c.d.e.f
     return new Proxy(storage, {
       get: (target, key) => {
+        // prototypes
+        const prototypes = {
+          _: storage
+        }
+        if (key in prototypes) return prototypes[key]
+
         // get val
         const value = target[key]
         // constants
@@ -330,18 +374,32 @@ class Storage {
     return ![undefined, null, NaN].includes(val)
   }
 
-  // Array to object
-  _createObject (list, value = null) {
+  _zip (array1, array2) {
+    if (array1.constructor !== Array || array2.constructor !== Array) {
+      throw new TypeError('all parameters must be array')
+    } else if (array1.length !== array2.length) {
+      throw new Error('the length of the two arrays must be equal')
+    }
+
+    return array1.reduce((acc, key, idx) => {
+      acc[key] = array2[idx]
+      return acc
+    }, {})
+  }
+
+  // create default value object from an array
+  _createObject (list, defaultValue = null) {
     return list.reduce((acc, key) => {
-      acc[key] = value
+      acc[key] = defaultValue
       return acc
     }, {})
   }
 
   _typeCheck (key, types = ['number', 'string']) {
     if (key && !types.includes(typeof key)) {
-      throw new Error('key type must be number or string')
+      throw new TypeError(`key type must in ${types}`)
     }
+    return true
   }
 
   _stringify (value) {
