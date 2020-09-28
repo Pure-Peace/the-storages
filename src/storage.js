@@ -186,12 +186,10 @@ class Storage {
         }
         this[`_${triggerType}`][eventType] = handler
       },
-
       // remove event watcher
       unwatch (triggerType, eventType) {
-        this[triggerType][eventType] = null
+        this[`_${triggerType}`][eventType] = null
       }
-
     }
 
     // function shorthands
