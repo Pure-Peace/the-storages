@@ -5,27 +5,74 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>the-storage</title>
+  <title>the-storage | vue3</title>
   <script src="https://unpkg.com/vue@next"></script>
   <script type="module">
+    import { createLocal } from './src/index.js'
+
+    // create storage
+    const strict = false // strict?
+    const local = createLocal({ strict }) 
+    window.local = local
+
+    // clear storage
+    local.clear()
+
+    console.log('here is your storage (proxy):', local)
+    console.log('here is your storage (real):', local._)
+    
+    local.testData = { data: 'hello, test!' }
+    // same as:
+    // local.testData.data = 'test'
+    // ↑ You can only do this on the proxy object
+    console.log('set a testData, now your storage:', local)
+
     const vm = Vue.createApp({
+      setup () {
+        let Local = Vue.ref(local)
+        return { Local }
+      },
       data() {
         return {
-          test: '1'
+          // if not strict, _value should be added at the end
+          test: 'local.testData.data._value || local.testData.data'
+        }
+      },
+      computed: {
+        testData() {
+          // if not strict, _value should be added at the end
+          return 'this.Local.testData.data._value || this.Local.testData.data'
+        }
+      },
+      watch: {
+        Local: {
+          handler: function(val) {
+            console.log(val, 111)
+          },
+          deep: true
+        }
+      },
+      methods: {
+        kickIt () {
+          console.log('you click me! testData.data -> "clicked"')
+          this.Local.testData.data = 'clicked'
+          console.log(this)
+          //this.$forceUpdate()
+          // this.test = 1
+          console.log('set a testData, now your storage:', local)
+          console.log('vue\'s Local:', this.Local)
         }
       }
     }).mount('#app')
-  </script>
-  <script type="module">
-    import { createLocal } from './src/index.js'
-    const local = createLocal({patchOrigin: true})
-    window.local = local
   </script>
 </head>
 
 <body>
   <div id="app">
-    {{ test }}
+    <div>data: {{ test }}</div>
+    <div>computed: {{ testData }}</div>
+    <div>computed: {{ Local }}</div>
+    <button @click="kickIt">click me, testData will change</button>
   </div>
 </body>
 

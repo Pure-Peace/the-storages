@@ -9,7 +9,6 @@ class Storage {
     }
     return this._init(types[type], type,
       Object.assign({
-        patchOrigin: true,
         strict: false
       },
       options || this._options || {})
@@ -37,9 +36,6 @@ class Storage {
       removeItem
     } = storage
 
-    // patch the origin storage object? (default: true)
-    if (!options.patchOrigin) storage = Object.assign({}, storage)
-
     // deep copy prototype of storage
     const _storage = Object.create(Object.getPrototypeOf(storage))
 
@@ -61,6 +57,8 @@ class Storage {
 
       // rewrite functions of prototype
       getItem (key, parse = true) {
+        // if (typeof key === 'symbol') return 'gg'
+
         const getValue = (_key) => {
           const originVal = getItem.call(this, _key)
           return parse ? _parse(originVal) : originVal
@@ -150,11 +148,12 @@ class Storage {
         _typeCheck(keyChain, ['string'])
         const keys = keyChain.trim().split('.')
         const first = keys.shift()
+        const last = keys.slice(-1)[0]
 
         let obj = _parse(getItem.call(this, first))
         if (!obj || typeof obj !== 'object') obj = {}
 
-        return this.set(first, _recursionObject(obj, keys))
+        return this.set(first, _recursionObject(obj, keys, last, value))
       },
 
       getChain  (keyChain) {
@@ -282,11 +281,16 @@ class Storage {
     // chain call (Recursive method)
     // the effective position is [after the first] recursive call of the storage: storage.b.[c.d.e.f]
     const chainObject = (obj, _key, keyChain = '') => {
+      if (typeof _key === 'symbol') return
+
       if (_key) keyChain += `${keyChain && '.'}${_key}`
-      return new Proxy(typeof obj === 'object' ? obj : { _value: obj }, {
+      return new Proxy(obj && typeof obj === 'object' ? obj : { _value: obj }, {
         get: (target, key) => {
           // prototypes
           const prototypes = {
+            __v_isRef: true,
+            value: 1,
+            __v_isReadonly: false,
             _value: obj,
             _key: keyChain,
             _type: 'proxy'
@@ -309,7 +313,8 @@ class Storage {
           }
         },
         set: (target, key, value) => {
-          storage.setChain(`${target._key}.${key}`, value)
+          storage.setChain(`${keyChain}.${key}`, value)
+          return value
         }
       })
     }
@@ -318,8 +323,13 @@ class Storage {
     // // the effective position is [the first] recursive call of the storage: storage.[b].c.d.e.f
     return new Proxy(storage, {
       get: (target, key) => {
+        if (typeof key === 'symbol') return
         // prototypes
         const prototypes = {
+          __v_isRef: true,
+          value: target,
+          __v_isReadonly: false,
+          _type: 'proxy',
           _: storage
         }
         if (key in prototypes) return prototypes[key]
@@ -343,6 +353,7 @@ class Storage {
       },
       set: (target, key, value) => {
         target.set(key, value)
+        return value
       }
     })
   }
