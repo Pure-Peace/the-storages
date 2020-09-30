@@ -1,12 +1,16 @@
 # the-storages
 ### Enhanced, Support data binding localStorage and sessionStorage.
 
-provide various api (async/sync methods) and storage event listeners.
+### provide various api (async/sync methods) and storage event listeners.
 
 In addition to supporting general use, support for Vue data binding and even multi-page data binding and sync.
 
 
 ### Description
+- Support Vue2, vue3, and Vue-Cli project
+  
+- Support Nuxt.js
+
 - Multi-page data binding and sync.
 
 - Provide storage change event listeners.
@@ -33,6 +37,11 @@ You can open multiple pages at the same time and experience data binding between
 
 ## Usage:
 
+### Install first:
+```
+npm i the-storages
+```
+
 ### Import:
 ```javascript
 // npm i the-storages
@@ -47,7 +56,8 @@ console.log(storage, mirror)
 
 ```
 
-### Vue-Cli: vue-the-storages (in progress...)
+### Vue-Cli: please use [vue-the-storages](https://github.com/pure-peace/vue-the-storages)
+
 
 ### Vue (common):
 

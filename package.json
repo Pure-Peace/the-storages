@@ -1,7 +1,7 @@
 {
   "name": "the-storages",
-  "version": "1.0.2",
-  "description": "Enhanced, Support data binding localStorage and sessionStorage. Provide storage event monitoring and async/sync api.",
+  "version": "1.0.3",
+  "description": "Enhanced, support data binding localStorage and sessionStorage.  It allows two-way binding of storage data, multi-page data binding, storage event listener, and rich api (async/sync).",
   "repository": {
     "type": "git",
     "url": "https://github.com/pure-peace/the-storages"
