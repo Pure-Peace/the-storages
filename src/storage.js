@@ -1,3 +1,5 @@
+import stringify from 'fast-json-stable-stringify'
+
 class Storage {
   create (type, options) {
     const types = {
@@ -9,7 +11,9 @@ class Storage {
     }
     return this._init(types[type], type,
       Object.assign({
-        strict: false
+        vueModule: null,
+        strict: false,
+        mirrorOperation: false
       },
       options || this._options || {})
     )
@@ -44,21 +48,121 @@ class Storage {
     _storage._type = type
     _storage._isStorage = true
 
+    // storage object data
+    const _data = () => Object.keys(storage).reduce((acc, key) => {
+      acc[key] = _parse(storage[key])
+      return acc
+    }, {})
+
+    // mirror object of storage
+    const mirror = _data()
+
+    // update the view
+    const _update = (key, value) => {
+      const keyIsNull = !_notNull(key)
+      // update mirror
+      if (keyIsNull) {
+        // do clear
+        Object.keys(mirror).forEach(_key => { delete mirror[_key] })
+      } else if (!_notNull(value)) {
+        // do remove
+        delete mirror[key]
+      } else {
+        // do set
+        const notNewKey = Object.keys(mirror).includes(key)
+        mirror[key] = value
+        if (notNewKey) return
+        // if new key and vm.$forceUpdate is valid
+        const vm = _storage._options.vueModule
+        if (vm && vm._isVue && vm.$forceUpdate) vm.$forceUpdate()
+      }
+    }
+
+    // create proxy
+    const _createProxy = (storageObject) => {
+      // chain call (Recursive method)
+      // the effective position is [after the first] recursive call of the storage: storage.b.[c.d.e.f]
+      const chainObject = (obj, _key, keyChain = '') => {
+        if (typeof _key === 'symbol') return // for vue3
+
+        if (_key) keyChain += `${keyChain && '.'}${_key}`
+        return new Proxy(obj && typeof obj === 'object' ? obj : { _value: obj }, {
+          get: (target, key) => {
+            // prototypes
+            const prototypes = {
+              __v_isRef: false,
+              __v_isReadonly: false,
+              _value: obj,
+              _key: keyChain,
+              _type: 'proxy'
+            }
+            if (key in prototypes) return prototypes[key]
+
+            // get val
+            const value = target[key]
+            // constants
+            const REAL_RESULT = ['string', 'number'].includes(typeof value)
+            const KEY_EXISTS = _notNull(value)
+            // switch handle
+            if (KEY_EXISTS && REAL_RESULT) {
+              return _storage._options.strict ? value : chainObject(value, key, keyChain)
+            } else if (KEY_EXISTS && !REAL_RESULT) {
+              return chainObject(value, key, keyChain)
+            } else if (!KEY_EXISTS) {
+            // value is null
+              return chainObject({}, key, keyChain)
+            }
+          },
+          set: (target, key, value) => {
+            storageObject.setChain(`${keyChain}.${key}`, value)
+            return value
+          }
+        })
+      }
+
+      // storage entrance proxy
+      // // the effective position is [the first] recursive call of the storage: storage.[b].c.d.e.f
+      return new Proxy(storageObject, {
+        get: (target, key) => {
+          if (typeof key === 'symbol') return // for vue3
+          // prototypes
+          const prototypes = {
+            __v_isRef: false,
+            __v_isReadonly: false,
+            _type: 'proxy',
+            _: storageObject,
+            _mirror: mirror
+          }
+          if (key in prototypes) return prototypes[key]
+
+          // get val
+          const value = target[key]
+          // constants
+          const isResult = ['string', 'number'].includes(typeof value)
+          const keyExists = _notNull(value)
+          // switch handle
+          if (!keyExists) {
+            // value is null
+            return chainObject({}, key)
+          } else if (isResult) {
+            // value not null and value is a string
+            return chainObject(target.get(key), key)
+          } else if (!isResult) {
+            // value not null and value not a string
+            return value
+          }
+        },
+        set: (target, key, value) => {
+          target.set(key, value)
+          return value
+        }
+      })
+    }
+
     // prototype methods
     const methods = {
-      // dispatch ACTIVE event
-      _event (type, data) {
-        if (typeof this._active[type.split('_')[1]] === 'function') {
-          window.dispatchEvent(Object.assign(
-            new Event(type), { ...data, storageArea: storage, url: window.location.href }
-          ))
-        }
-      },
-
-      // rewrite functions of prototype
+      // rewrite functions of prototype ---------------------------------
       getItem (key, parse = true) {
-        // if (typeof key === 'symbol') return 'gg'
-
         const getValue = (_key) => {
           const originVal = getItem.call(this, _key)
           return parse ? _parse(originVal) : originVal
@@ -85,9 +189,10 @@ class Storage {
       setItem (key, value) {
         const getValue = (_key) => _parse(getItem.call(this, _key))
         const setValue = (_key, _value) => setItem.call(this, _key, _stringify(_value))
-        const setEvent = (newValue, oldValue) => this._event(`${type}_set`, {
-          key, newValue, oldValue
-        })
+        const setEvent = (newValue, oldValue) => {
+          _update(key, value)
+          this._event(`${type}_set`, { key, newValue, oldValue })
+        }
         const objectHandle = (object) => {
           const oldValue = Object.keys(object).reduce((acc, _key) => {
             acc[_key] = getValue(_key)
@@ -117,9 +222,10 @@ class Storage {
       removeItem  (key, pop = false) {
         const getValue = (_key) => _parse(getItem.call(this, _key))
         const remove = (_key) => removeItem.call(this, _key)
-        const removeEvent = (oldValue) => this._event(`${type}_${pop ? 'pop' : 'remove'}`, {
-          key, newValue: null, oldValue
-        })
+        const removeEvent = (oldValue) => {
+          _update(key)
+          this._event(`${type}_${pop ? 'pop' : 'remove'}`, { key, newValue: null, oldValue })
+        }
         // multple key handle
         if (key.constructor === Array) {
           const oldValue = key.reduce((acc, _key) => {
@@ -139,11 +245,13 @@ class Storage {
 
       clear () {
         clear.call(this)
+        _update()
         this._event(`${type}_clear`, {
           key: null, newValue: null, oldValue: null
         })
       },
 
+      // extra methods ---------------------------------
       setChain (keyChain, value) {
         _typeCheck(keyChain, ['string'])
         const keys = keyChain.trim().split('.')
@@ -185,13 +293,42 @@ class Storage {
         }
         this[`_${triggerType}`][eventType] = handler
       },
+
       // remove event watcher
       unwatch (triggerType, eventType) {
         this[`_${triggerType}`][eventType] = null
+      },
+
+      // dispatch ACTIVE (current page trigger) event
+      _event (type, data) {
+        if (typeof this._active[type.split('_')[1]] === 'function') {
+          window.dispatchEvent(
+            Object.assign(new Event(type), { ...data, storageArea: storage, url: window.location.href })
+          )
+        }
+      },
+
+      // rewrite origin toString
+      toString () {
+        return _stringify(this)
+      },
+
+      // storage bind vueModule
+      bindVm (vueModule) {
+        if (vueModule && vueModule._isVue) {
+          _storage._options.vueModule = vueModule
+          return
+        }
+        console.error('[storage error] bindVm: The provided parameter is not a vue module')
+      },
+
+      // storage object data
+      get _data () {
+        return _data()
       }
     }
 
-    // function shorthands
+    // method shorthands
     const shorthands = {
       get: methods.getItem,
       set: methods.setItem,
@@ -204,20 +341,22 @@ class Storage {
       unwatchPassive: eventType => storage.unwatch('passive', eventType)
     }
 
+    // valid watcher event
     const vaildEvents = {
       _activeEvents: Object.freeze(['get', 'set', 'remove', 'pop', 'clear']),
       _passiveEvents: Object.freeze(['set', 'remove', 'clear'])
     }
 
+    // watcher triggers
     const triggers = {
       _active: Object.seal(_createObject(vaildEvents._activeEvents)),
       _passive: Object.seal(_createObject(vaildEvents._passiveEvents))
     }
 
-    // set methods
-    Object.assign(_storage, methods, shorthands, vaildEvents, vaildEvents, triggers)
+    // set methods to storage prototype
+    Object.assign(_storage, methods, shorthands, vaildEvents, triggers)
 
-    // functions sync to async
+    // some storage functions should: sync to async
     const asyncPrefix = ''
     const asyncSuffix = 'Async'
     const asyncFuncs = ['set', 'get', 'remove', 'clear', 'pop', 'getChain', 'setChain']
@@ -225,11 +364,13 @@ class Storage {
       _storage[`${asyncPrefix}${funcKey}${asyncSuffix}`] = _asyncWrapper(_storage[funcKey].bind(storage))
     })
 
-    // ACTIVE event handlers
+    // ACTIVE event handle
     const _handle = (e, eventKey) => {
       const method = _storage._active[eventKey]
       return typeof method === 'function' ? method(e) : method
     }
+
+    // ACTIVE event handlers
     const activeEventHandlers = {
       GetItem: e => _handle(e, 'get'),
       SetItem: e => _handle(e, 'set'),
@@ -249,19 +390,25 @@ class Storage {
     if (type === 'localStorage') {
       const storageEventHandler = (e) => {
         // parse event data (newValue, oldValue)
-        const parse = (storageEvent, ...props) => props.forEach(
+        const parseEvent = (storageEvent, ...props) => props.forEach(
           prop => Object.defineProperty(storageEvent, prop, { value: _parse(storageEvent[prop]) })
         )
         if ([e.key, e.newValue, e.oldValue].every(i => i === null)) {
-          // on clear
+          // on clear ------
+          _update()
+          // watcher handle
           _storage._passive.clear && _storage._passive.clear(e)
         } else if (e.key !== null && e.newValue !== null) {
-          // on set
-          parse(e, 'newValue', 'oldValue')
+          // on set ------
+          parseEvent(e, 'newValue', 'oldValue')
+          // watcher handle
+          _update(e.key, e.newValue)
           _storage._passive.set && _storage._passive.set(e)
         } else if (e.key !== null && e.newValue === null) {
-          // on remove
-          parse(e, 'newValue', 'oldValue')
+          // on remove ------
+          parseEvent(e, 'newValue', 'oldValue')
+          // watcher handle
+          _update(e.key)
           _storage._passive.remove && _storage._passive.remove(e)
         }
       }
@@ -277,83 +424,27 @@ class Storage {
 
     // set prototype to storage
     Object.setPrototypeOf(storage, _storage)
+    const proxyStorage = _createProxy(storage)
 
-    // chain call (Recursive method)
-    // the effective position is [after the first] recursive call of the storage: storage.b.[c.d.e.f]
-    const chainObject = (obj, _key, keyChain = '') => {
-      if (typeof _key === 'symbol') return
-
-      if (_key) keyChain += `${keyChain && '.'}${_key}`
-      return new Proxy(obj && typeof obj === 'object' ? obj : { _value: obj }, {
-        get: (target, key) => {
-          // prototypes
-          const prototypes = {
-            __v_isRef: true,
-            value: 1,
-            __v_isReadonly: false,
-            _value: obj,
-            _key: keyChain,
-            _type: 'proxy'
-          }
-          if (key in prototypes) return prototypes[key]
-
-          // get val
-          const value = target[key]
-          // constants
-          const REAL_RESULT = ['string', 'number'].includes(typeof value)
-          const KEY_EXISTS = _notNull(value)
-          // switch handle
-          if (KEY_EXISTS && REAL_RESULT) {
-            return _storage._options.strict ? value : chainObject(value, key, keyChain)
-          } else if (KEY_EXISTS && !REAL_RESULT) {
-            return chainObject(value, key, keyChain)
-          } else if (!KEY_EXISTS) {
-            // value is null
-            return chainObject({}, key, keyChain)
-          }
-        },
-        set: (target, key, value) => {
-          storage.setChain(`${keyChain}.${key}`, value)
-          return value
-        }
-      })
-    }
-
-    // storage entrance proxy
-    // // the effective position is [the first] recursive call of the storage: storage.[b].c.d.e.f
-    return new Proxy(storage, {
-      get: (target, key) => {
-        if (typeof key === 'symbol') return
+    // done
+    return new Proxy(mirror, {
+      get (target, key) {
         // prototypes
         const prototypes = {
-          __v_isRef: true,
-          value: target,
-          __v_isReadonly: false,
-          _type: 'proxy',
-          _: storage
+          _storage: storage,
+          _prx: proxyStorage
         }
         if (key in prototypes) return prototypes[key]
-
-        // get val
-        const value = target[key]
-        // constants
-        const REAL_RESULT = ['string', 'number'].includes(typeof value)
-        const KEY_EXISTS = _notNull(value)
-        // switch handle
-        if (KEY_EXISTS && REAL_RESULT) {
-          // value not null and value is a string
-          return chainObject(target.get(key), key)
-        } else if (KEY_EXISTS && !REAL_RESULT) {
-          // value not null and value not a string
-          return value
-        } else if (!KEY_EXISTS) {
-          // value is null
-          return chainObject({}, key)
-        }
+        if (key in _storage) return proxyStorage[key]
+        return target[key]
       },
-      set: (target, key, value) => {
-        target.set(key, value)
-        return value
+      set (target, key, value) {
+        if (!_storage._options.mirrorOperation) {
+          // Not allowed to directly modify the mirror
+          // because it must always be consistent with storage
+          throw new Error('[storage] The mirror object should be read-only, you can use it for data binding, but should not be modified directly')
+        }
+        _storage.set(key, value)
       }
     })
   }
@@ -414,7 +505,7 @@ class Storage {
   _stringify (value) {
     if (typeof value === 'string') { return value }
     try {
-      return JSON.stringify(value)
+      return stringify(value)
     } catch {
       return value
     }

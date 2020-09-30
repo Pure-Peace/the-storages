@@ -30,5 +30,8 @@
     "eslint-plugin-promise": "^4.2.1",
     "eslint-plugin-standard": "^4.0.1",
     "snowpack": "^2.12.1"
+  },
+  "dependencies": {
+    "fast-json-stable-stringify": "^2.1.0"
   }
 }
