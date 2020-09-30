@@ -3,7 +3,7 @@
 
 provide various api (async/sync methods) and storage event listeners.
 
-In addition to supporting general use, support for vue data binding and even multi-page data binding and sync.
+In addition to supporting general use, support for Vue data binding and even multi-page data binding and sync.
 
 
 ### Description
@@ -14,6 +14,8 @@ In addition to supporting general use, support for vue data binding and even mul
 - Various calling methods.
 
 - Automatic JSON parsing.
+
+- Support Vue2, vue3
 
 - Mainly written using es6 and proxy. 
 
