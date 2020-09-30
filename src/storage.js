@@ -13,7 +13,8 @@ class Storage {
       Object.assign({
         vueModule: null,
         strict: true,
-        mirrorOperation: false
+        mirrorOperation: false,
+        updateMirror: true
       },
       options || this._options || {})
     )
@@ -59,24 +60,38 @@ class Storage {
 
     // update the view
     const _update = (key, value) => {
+      if (_storage._options.updateMirror === false) return
+
       const keyIsNull = !_notNull(key)
+      const valueIsNull = !_notNull(value)
+      const keyIsObject = key && key.constructor === Object
+
+      const vueUpdate = () => {
+        const vm = _storage._options.vueModule
+        if (vm && vm.$forceUpdate) vm.$forceUpdate()
+      }
       // update mirror
       if (keyIsNull) {
         // do clear
         Object.keys(mirror).forEach(_key => { delete mirror[_key] })
         // if new key and vm.$forceUpdate is valid, do update
-        const vm = _storage._options.vueModule
-        if (vm && vm.$forceUpdate) vm.$forceUpdate()
-      } else if (!_notNull(value)) {
-        // do remove
-        delete mirror[key]
+      } else if (keyIsObject) {
+        // do multiple set
+        Object.keys(key).forEach(_key => { mirror[_key] = key[_key] })
+      } else if (valueIsNull) {
+        if (key.constructor === Array) {
+          // do multiple remove
+          key.forEach(_key => { delete mirror[_key] })
+        } else {
+          // do remove
+          delete mirror[key]
+        }
       } else {
         // do set
         mirror[key] = value
         // if new key and vm.$forceUpdate is valid, do update
-        const vm = _storage._options.vueModule
-        if (vm && vm.$forceUpdate) vm.$forceUpdate()
       }
+      vueUpdate()
     }
 
     // create proxy
@@ -191,8 +206,9 @@ class Storage {
       },
 
       setItem (key, value, parse = false) {
+        const keyIsObject = key && key.constructor === Object
         if (parse) value = _parse(value)
-        if (!key || !value) return
+        if (!key || (!value && !keyIsObject)) return
 
         const getValue = (_key) => _parse(getItem.call(this, _key))
         const setValue = (_key, _value) => setItem.call(this, _key, _stringify(_value))
@@ -210,11 +226,12 @@ class Storage {
           return object
         }
         // key is an object
-        if (key && key.constructor === Object) {
+        if (keyIsObject) {
           return objectHandle(key)
         } else if ((key && key.constructor === Array) && (value && value.constructor === Array)) {
           // key is a list, value must be a list too
-          return objectHandle(_zip(key, value))
+          key = _zip(key, value)
+          return objectHandle(key)
         } else if (_typeCheck(key)) {
           // single key and value
           const oldValue = _parse(getItem.call(this, key))
@@ -245,6 +262,7 @@ class Storage {
         // single key handle
         } else if (_typeCheck(key)) {
           const oldValue = getValue(key)
+          remove(key)
           removeEvent(oldValue)
           if (pop) return oldValue
         }

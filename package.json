@@ -9,7 +9,6 @@
   "main": "./src/index.js",
   "scripts": {
     "lint": "eslint ./src/*",
-    "doc": "jsdoc ./src/* -d ./doc",
     "dev": "snowpack dev"
   },
   "keywords": [

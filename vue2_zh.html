@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- storages test page for vue2 -->
+  <!-- storages test page for vue2 -->
+  <!-- storages test page for vue2 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>the-storages | vue2</title>
+  <script src="https://unpkg.com/vue"></script>
+  <style>
+    div {
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <h1>the-storage | vue2</h1>
+    <div>strict mode: {{ strict }}</div>
+    <div>storageData (storage mirror object): {{ storageData }}</div>
+    <div>storageProxyObj (storage proxy object): {{ storageProxyObj }}</div>
+    <div>
+      <button @click="test">单击我，设置测试数据</button>
+    </div>
+    <div>
+      <h3>添加数据到storage (自动转换value类型)</h3>
+      <label>key: <input type="text" v-model="inputKey" /></label>
+      <label>value: <input type="text" v-model="inputValue" /></label>
+      <button @click="testSet">设置storage</button>
+    </div>
+    <div>
+      <h3>测试</h3>
+      <div>
+        <button @click="() => { storageProxyObj.clear() }">清空storage</button>
+        <button @click="testAsyncSet">async 异步向storage添加一个比较大的数据</button>
+        <button @click="testSyncSet">sync 同步向storage添加一个比较大的数据</button>
+        <button @click="showInterfaces">打印所有接口</button>
+        <button @click="showMirrorLength">使用mirror对象打印storage长度</button>
+        <div>
+          <a :href="href" target="_blank">打开另一个测试页面</a>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h4>Github</h4>
+      <div>
+        <a href="https://github.com/Pure-Peace/the-storages">
+          https://github.com/Pure-Peace/the-storages
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createLocal, createSession, createStorage } from './src/index.js'
+
+    const logStorages = (type) => {
+      const title = `[${type}] storage objects`
+      console.group(title)
+      console.log('storage (mirror):', mirror)
+      console.log('storage (proxy):', storageProxyObj)
+      console.log('storage (real):', originStorage)
+      console.groupEnd(title)
+    }
+
+    // 生成一个比较大的数据
+    const bigData = Array.from(Array(5000), (v, k) => k)
+
+    /*
+      严格模式
+      strict 
+      默认: true
+
+      如果设为false，可以直接对storage proxy进行递归赋值，即便过程中遇到不存在的属性，也能够赋值成功，不会报错
+      例如:
+        现在storage是空的，我想给storage增加一个嵌套很多层的数据，可以直接这样做：
+        storageProxy.a.b.c.d.e.f.g = '数据'
+
+        不过，设为false后直接从storage proxy上获取到的所有数据都将是一个proxy对象，真实的数据是proxy对象上的_value属性
+
+      所以:
+        假如要获取刚才在 'g' 上设置的数据
+          如果把strict设为false，这样调用：storageProxy.a.b.c.d.e.f.g._value （最后加._value）
+          如果strict保持默认值（true），则是这样：storageProxy.a.b.c.d.e.f.g （正常调用）
+    */
+    const strict = true
+
+    /*
+      是否允许对storage镜像进行直接赋值
+      mirrorOperation 
+      default: false
+
+      如果设为true，你对storage镜像进行的赋值会同步到storage上。
+
+      例如:
+        mirror.a = 1 (mirrorOperation设为true时可以，数据将同步到storage上)
+        mirror.a = 1 (mirrorOperation设为false时报错，不允许这么做)
+
+      注意，不建议这么做，可能导致镜像和storage对象不同步
+      修改数据请对storage proxy或storage对象本身操作
+
+      因为镜像本身的定位是用来做数据绑定的，而非数据操作。
+
+    */
+    const mirrorOperation = true
+
+    /*
+      createLocal: 创建一个localStorage
+        参数: options (object)
+    
+      将会返回一个storage的镜像（storage mirror），可以直接用于数据绑定
+      镜像的数据会自动与storage的数据同步
+
+      建议使用 [storage proxy object] 进行数据操作，而不是storage mirror, 因为镜像本身是为了数据绑定而存在的。
+        
+        数据操作，比如：
+          const storageProxyObj = mirror._prx // 这里的是 storage proxy objcet（storage代理对象）
+          
+          // 使用代理对象原型上的方法操作storage
+          storageProxyObj.set()
+          storageProxyObj.get()
+          storageProxyObj.clear()
+          // 或者直接赋值，也能够操作storage
+          storageProxyObj.a = 1
+          storageProxyObj.b = { test: 1 }
+            ...
+        
+      不过mirror对象拥有 storage代理对象上的所有方法，他们是隐藏的，console.log打印出来的mirror上也许无法直观看到这些方法
+      不过你可以直接在mirror上调用这些方法
+      
+        
+        例如:
+          mirror.set('a', 1) // 相当于 storageProxyObj.set('a', 1)
+          mirror.length // 相当于 storageProxyObj.length
+            ...
+    */
+    const mirror = createLocal({ strict })
+
+    // storage代理对象，默认位于镜像对象上的_prx属性
+    const storageProxyObj = mirror._prx
+
+    // 原生的 localStorage object （虽说是原生对象，但其内心已经被魔改）
+    const originStorage = mirror._storage
+
+    // 挂载到window对象上，浏览器开发者工具可以直接console.log
+    window.mirror = mirror
+    window.proxy = storageProxyObj
+    window.storage = originStorage
+
+    // 清空storage
+    storageProxyObj.clear()
+    console.log('storage已清空:')
+    logStorages('cleared')
+
+    // 设置一个数据到storage
+    storageProxyObj.test = { message: 'hello, the-storage!' }
+    /* 
+      相当于:
+        storageProxyObj.test.message = 'hello, the-storage!'
+            ↑ 也你可以这么做（strict为true时对不存在的属性进行递归赋值将会报错）
+          或者是
+        storageProxyObj.setChain('test.message', 'hello, the-storage!')
+          或者是
+        storageProxyObj.set(test, { message: 'hello, the-storage!' })
+          或者是
+        storageProxyObj.set({ test: { message: 'hello, the-storage!' } })
+          或者是
+        storageProxyObj.set([ test ], [{ message: 'hello, the-storage!' }])
+
+        他们的效果都是一样的，写法很多，随你选择
+    */
+
+    console.log('设置了一个初始数据：')
+    logStorages('setted')
+
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          href: window.location.href,
+          inputKey: '',
+          inputValue: '',
+
+          // storage镜像上的数据会自动更新，适合数据绑定
+          storageData: mirror,
+
+          // storage代理对象上有着全部方法和特性，更适合数据操作赋值
+          storageProxyObj: storageProxyObj,
+
+          // 严格模式？
+          strict
+        }
+      },
+      created() {
+        // bindVm用于确保视图上的变量会自动更新，不然可能出现数据更新了，视图没更新的情况
+        this.storageProxyObj.bindVm(this)
+
+        // 你可以注册很多监听器
+        /* 
+          "ACTIVE" 指的是当前页面触发的storage事件
+          
+          可以通过下面的代码获取所有支持监听的active事件
+            console.log(this.storageProxyObj._activeEvents)
+              -> ["get", "set", "remove", "pop", "clear"]
+
+        */
+        this.storageProxyObj.watchActive('get', e => {
+          console.log('当前页面触发了 [get]:', e)
+        })
+        this.storageProxyObj.watchActive('set', e => {
+          console.log('当前页面触发了 [set]:', e)
+        })
+        this.storageProxyObj.watchActive('remove', e => {
+          console.log('当前页面触发了 [remove]:', e)
+        })
+        this.storageProxyObj.watchActive('pop', e => {
+          console.log('当前页面触发了 [pop]:', e)
+        })
+        this.storageProxyObj.watchActive('clear', e => {
+          console.log('当前页面触发了 [clear]:', e)
+        })
+
+
+        /* 
+          "Passive" 指的是其它页面触发的storage事件，你将在本页面监听到它们
+
+          可以通过下面的代码获取所有支持监听的passive事件
+            console.log(this.storageProxyObj._passiveEvents)
+              -> ["get", "set", "remove"]
+          
+          在其他页面上修改storage的事件将在本页面触发
+
+          注意：如果重复地在storage设置相同key、相同value，将不会一直触发passive事件，它只会触发一次
+
+        */
+        this.storageProxyObj.watchPassive('clear', e => {
+          console.log('其他页面触发了 [clear]:', e)
+        })
+        this.storageProxyObj.watchPassive('set', e => {
+          console.log('其他页面触发了 [set]:', e)
+        })
+        this.storageProxyObj.watchPassive('remove', e => {
+          console.log('其他页面触发了 [remove]:', e)
+        })
+      },
+      methods: {
+        test() {
+          console.log('你点我？storage上的数据要变了！')
+
+          // 设置数据到storage
+          //this.storageProxyObj.test.message = 'wow, you click me!'
+          this.storageProxyObj.set('test', { message: 'wow, you kick me!' })
+
+          console.log('设置了一个数据：')
+          logStorages('setted')
+        },
+        testSet() {
+          // 如果没有key或者value，那就没有把数据设置到storage上的意义（删除数据请用remove）
+          if (this.inputKey && this.inputValue) {
+            this.storageProxyObj.set(this.inputKey, this.inputValue, true)
+            console.log('设置了数据到storage:', 'key:', this.inputKey, 'value:', this.inputValue)
+            this.inputKey = this.inputValue = ''
+            logStorages('setted')
+          }
+        },
+        testAsyncSet () {
+          console.group('async test')
+          console.log('[async test] 将会设置一个较大的数据到storage上:', bigData)
+          console.log('async start')
+          console.time()
+          // async
+          this.storageProxyObj.setAsync('bigData', bigData).then(e => {
+            console.log('async set 搞定!')
+          })
+          console.timeEnd()
+          console.log('async end')
+          console.groupEnd('async test')
+        },
+        testSyncSet () {
+          console.group('sync test')
+          console.log('[sync test] 将会设置一个较大的数据到storage上:', bigData)
+          console.time()
+          // sync
+          this.storageProxyObj.set('bigData', bigData)
+          console.log('sync set 搞定!')
+          console.timeEnd()
+          console.groupEnd('sync test')
+        },
+        showInterfaces () {
+          console.log(this.storageProxyObj._interfaces)
+        },
+        showMirrorLength () {
+          console.log(this.storageData.length)
+        }
+      }
+    })
+  </script>
+</body>
+
+</html>
