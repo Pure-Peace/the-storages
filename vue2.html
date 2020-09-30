@@ -2,14 +2,14 @@
 <html lang="en">
 
 <head>
-  <!-- storage test page for vue3 -->
-  <!-- storage test page for vue3 -->
-  <!-- storage test page for vue3 -->
+  <!-- storage test page for vue2 -->
+  <!-- storage test page for vue2 -->
+  <!-- storage test page for vue2 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>the-storage | vue3</title>
-  <script src="https://unpkg.com/vue@next"></script>
+  <title>the-storage | vue2</title>
+  <script src="https://unpkg.com/vue"></script>
   <style>
     div {
       padding: 10px;
@@ -19,7 +19,7 @@
 
 <body>
   <div id="app">
-    <h1>the-storage | vue3</h1>
+    <h1>the-storage | vue2</h1>
     <div>strict mode: {{ strict }}</div>
     <div>storageData (storage mirror object): {{ storageData }}</div>
     <div>storageProxyObj (storage proxy object): {{ storageProxyObj }}</div>
@@ -168,26 +168,24 @@
     console.log('set a default data, now your storage:')
     logStorages('setted')
 
-    const vm = Vue.createApp({
-      setup () {
-        // the mirror object can make the data update automatically
-        // so it's more suitable for obtaining storage data
-        let storageData = Vue.ref(mirror)
-
-        // the storage proxy object has all the methods and features (but it is not recommended to put it directly into the view)
-        // so it's more suitable for storage operation
-        let _storageProxyObj = Vue.ref(storageProxyObj)
-
-        // is strict mode?
-        let _strict = Vue.ref(strict)
-
-        return { storageData, storageProxyObj: _storageProxyObj, strict: _strict }
-      },
+    new Vue({
+      el: '#app',
       data() {
         return {
           href: window.location.href,
           inputKey: '',
-          inputValue: ''
+          inputValue: '',
+
+          // the mirror object can make the data update automatically
+          // so it's more suitable for obtaining storage data
+          storageData: mirror,
+
+          // the storage proxy object has all the methods and features (but it is not recommended to put it directly into the view)
+          // so it's more suitable for storage operation
+          storageProxyObj: storageProxyObj,
+
+          // is strict mode?
+          strict
         }
       },
       created() {
@@ -293,7 +291,7 @@
           console.log(this.storageData.length)
         }
       }
-    }).mount('#app')
+    })
   </script>
 </body>
 
