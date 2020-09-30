@@ -1,4 +1,4 @@
-﻿# the-storages
+# the-storages
 ### Enhanced, Support data binding localStorage and sessionStorage.
 
 provide various api (async/sync methods) and storage event listeners.
@@ -28,9 +28,26 @@ You can open multiple pages at the same time and experience data binding between
 
 - #### [the-storages in Vue.js 2 zh](http://miya.ink/the-storages/vue2_zh.html)
 
-### Basic usage:
 
-#### Vue:
+## Usage:
+
+### Import:
+```javascript
+// npm i the-storages
+import { createLocal, createSession } from 'the-storages'
+
+const mirror = createLocal() // create localStorage; createSession is sessionStorage
+const storage = mirror._prx 
+
+console.log(storage, mirror)
+storage.set('hello', 'world')
+console.log(storage, mirror)
+
+```
+
+### Vue-Cli: vue-the-storages (in progress...)
+
+### Vue (common):
 
 See [index.html](https://github.com/Pure-Peace/the-storages/blob/master/index.html) for details (vue3).
 [vue2.html](https://github.com/Pure-Peace/the-storages/blob/master/vue2.html),
@@ -104,25 +121,7 @@ See [index.html](https://github.com/Pure-Peace/the-storages/blob/master/index.ht
 </html>
 ```
 
-
-#### Common:
-```javascript
-// npm i the-storages
-import { createLocal, createSession, createStorage } from 'the-storages'
-
-// create storage mirror object (localStorage)
-// mirror object used for data binding, get data
-const mirror = createLocal() 
-
-// storage proxy object (enhanced storage)
-// used to operate storage
-const storage = mirror._prx 
-
-storage.set('test', 'aa!')
-
-```
-
-#### Methods:
+### Samples:
 ```javascript
 // set data to localStorage
 storage.set('test', { message: 'im an object' }) // set a object
@@ -182,6 +181,319 @@ storage.unwatchActive('get')
 storage.unwatchPassive('get')
 ```
 
+## Docs:
+
+    Some docs here...
+
+```javascript
+import { createLocal, createSession, Storage } from 'the-storages'
+
+const mirror = createLocal() // create localStorage; createSession is sessionStorage
+const storage = mirror._prx  // storage proxy
+```
+
+- ### createLocal
+    > create enhanced localStorage <br>
+    > only localstorage supports multi-page data binding
+    ```javascript
+    createLocal(options)
+    ```
+    ##### options: Object
+    > Default options
+    ```javascript
+    {
+        vueModule: null,
+        strict: true,
+        mirrorOperation: false,
+        updateMirror: true
+    }
+    ```
+
+- ### createSession
+    > create enhanced sessionStorage
+    > Since the session of each page is independent, multi-page data binding is not supported
+    ```javascript
+    createSession(options)
+    ```
+    ##### options: Object
+    > Default options: same
+
+
+## storage (proxy) object methods
+
+- ### getItem
+    > get item from storage
+    ```javascript
+    storage.getItem(key, parse = true)
+    ```
+    ##### key: String, Array
+    > if key is an Array, get multiple, return object.
+    ##### parse: Boolean
+    > if parse, try to return JSON.parse(result)
+
+
+- ### get
+    > Shorthand method name for getItem
+    ```javascript
+    storage.get(key, parse = true)
+    ```
+
+
+- ### getAsync
+    > Asynchronous method of getItem
+    ```javascript
+    storage.getAsync(...args).then(res => {})
+    ```
+
+
+- ### setItem
+    > set item from storage
+    ```javascript
+    storage.setItem(key, value)
+    ```
+    ##### key: String, Array, Object
+    > If both key and value are array types, set multiple. [...keys] -> [...values] <br>
+    > If key is an Object, set multiple. { key1: value1, key2: value2 }
+    ##### value: Any
+    > The value will fix with JSON.stringify
+
+
+- ### set
+    > Shorthand method name for setItem
+    ```javascript
+    storage.set(key, value)
+    ```
+
+- ### setAsync
+    > Asynchronous method of setItem
+    ```javascript
+    storage.setAsync(...args).then(res => {})
+    ```
+
+
+- ### removeItem
+    > remove item from storage
+    ```javascript
+    storage.removeItem(key, pop = false)
+    ```
+    ##### key: String, Array
+    > If key is an Array, remove multiple keys.
+    ##### pop: Boolean
+    > If pop, removeItem will return the deleted value
+
+
+- ### remove
+    > Shorthand method name for removeItem
+    ```javascript
+    storage.remove(key, pop = false)
+    ```
+
+- ### removeAsync
+    > Asynchronous method of removeItem
+    ```javascript
+    storage.removeAsync(...args).then(res => {})
+    ```
+
+
+- ### clear
+    > clear the storage
+    ```javascript
+    storage.clear()
+    ```
+
+- ### clearAsync
+    > Asynchronous method of clear
+    ```javascript
+    storage.clearAsync().then(res => {})
+    ```
+
+
+- ### setChain
+    > Set storage data recursively, try not to overwrite the attributes on the chain.
+    ```javascript
+    storage.setChain(keyChain, value)
+    ```
+    ##### keyChain: String
+    > sample: storage.setChain('a.b.c.d.e', 1) == (storage.a.b.c.d.e = 1)
+    ##### value: Any
+    > Value will be set on the last object of keyChain
+
+
+- ### setChainAsync
+    > Asynchronous method of setChain
+    ```javascript
+    storage.setChainAsync(...args).then(res => {})
+    ```
+
+
+- ### getChain
+    > Get storage data recursively, will get the value of the last object on keyChain.
+    ```javascript
+    storage.setChain(keyChain, value)
+    ```
+    ##### key: String
+    > sample: storage.getChain('a.b.c.d.e') == storage.a.b.c.d.e
+
+    - ### setChainAsync
+    > Asynchronous method of getChain
+    ```javascript
+    storage.getChainAsync(...args).then(res => {})
+    ```
+
+
+- ### watch
+    > Add a listener for the specified type of storage change event
+    ```javascript
+    storage.watch(triggerType, eventType, handler)
+    ```
+    ##### triggerType: String
+    > Must be 'active' or 'passive'. <br>
+    > active: events triggered by the current page <br>
+    > passive: events triggered by the other page
+    ##### eventType: String
+    > Add handler function for specified event. <br>
+    > active: must in ["get", "set", "remove", "pop", "clear"] <br>
+    > passive: must in ["set", "remove", "clear"]
+    ##### handler: Function
+    > Handler will receives a parameter: event
+
+
+- ### watchActive
+    > Asynchronous method of watch, triggerType is 'active'
+    ```javascript
+    storage.watchActive(eventType, handler)
+    ```
+
+- ### watchPassive
+    > Asynchronous method of watch, triggerType is 'passive'
+    ```javascript
+    storage.watchPassive(eventType, handler)
+    ```
+
+
+- ### unwatch
+    > Remove listener for the specified type of storage change event
+    ```javascript
+    storage.unwatch(triggerType, eventType)
+    ```
+    ##### triggerType: String
+    > Must be 'active' or 'passive'. <br>
+    > active: events triggered by the current page <br>
+    > passive: events triggered by the other page
+    ##### eventType: String
+    > Remove listener for specified event. <br>
+    > active: must in ["get", "set", "remove", "pop", "clear"] <br>
+    > passive: must in ["set", "remove", "clear"]
+
+
+- ### unwatchActive
+    > Asynchronous method of unwatch, triggerType is 'active'
+    ```javascript
+    storage.unwatchActive(eventType)
+    ```
+
+
+- ### watchPassive
+    > Asynchronous method of unwatch, triggerType is 'passive'
+    ```javascript
+    storage.unwatchPassive(eventType)
+    ```
+
+
+- ### bindVm
+    > Binding the Vue module (instance) object to ensure that the Vue view can be updated.
+    ```javascript
+    storage.bindVm(vueModule)
+    ```
+    ##### vueModule: Vue instance
+    > Equivalent to "this" in the vue instance. <br>
+    > Please call this function to bind "this" when the page is initialized.
+
+
+
+- ### toString
+    > return storage data as JSON string
+    ```javascript
+    storage.toString()
+    ```
+
+
+- ### _data
+    > return storage data as Object
+    ```javascript
+    storage._data()
+    ```
+
+
+## Storage constructor methods
+```javascript
+const _Storage = new Storage()
+```
+
+- ### create
+    > create and return an enhanced storage mirror object. <br>
+    ```javascript
+    _Storage.create(type, options)
+    ```
+    ##### type: String
+    > must be 'localStorage' or 'sessionStorage'.
+    ##### options: Object
+    > Please see the default options of createLocal
+
+
+- ### _asyncWrapper
+    > Convert sync functions to async functions and return
+    ```javascript
+    _Storage._asyncWrapper(func)
+    ```
+    ##### func: Function
+    > sync functions
+
+
+- ### _createObject
+    > Create Object through Array
+    ```javascript
+    _Storage._asyncWrapper(list, defaultValue = null))
+    ```
+    ##### list: Array
+    > keys Array
+    ##### defaultValue: any
+    > every key's value
+
+
+- ### _notNull
+    > is val === null || undefined || nan ?
+    ```javascript
+    _Storage._notNull(val)
+    ```
+    ##### val: any
+
+
+- ### _parse
+    > Try to parse the JSON string (return the original value if it fails)
+    ```javascript
+    _Storage._parse(value)
+    ```
+    ##### value: any
+
+
+- ### _stringify
+    > Try to stringify the value (return the original value if it fails)
+    ```javascript
+    _Storage._stringify(value)
+    ```
+    ##### value: any
+
+
+- ### _zip
+    > Compress two Arrays into an object corresponding to a key value
+    ```javascript
+    _Storage._zip(array1, array2)
+    ```
+    ##### array1: Array
+    > keys Array
+    ##### array2: Array
+    > values Array
 
 ## Development / test
 
@@ -226,3 +538,6 @@ http://localhost:8080/vue2_zh
 
 ### Snowpack
 It is recommended to use snowpack to run or build (instead of webpack with babel, beacuse snowpack natively supports es6, and faster)
+
+
+## MIT
