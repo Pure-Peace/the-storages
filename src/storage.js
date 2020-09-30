@@ -12,7 +12,7 @@ class Storage {
     return this._init(types[type], type,
       Object.assign({
         vueModule: null,
-        strict: false,
+        strict: true,
         mirrorOperation: false
       },
       options || this._options || {})
@@ -64,17 +64,18 @@ class Storage {
       if (keyIsNull) {
         // do clear
         Object.keys(mirror).forEach(_key => { delete mirror[_key] })
+        // if new key and vm.$forceUpdate is valid, do update
+        const vm = _storage._options.vueModule
+        if (vm && vm.$forceUpdate) vm.$forceUpdate()
       } else if (!_notNull(value)) {
         // do remove
         delete mirror[key]
       } else {
         // do set
-        const notNewKey = Object.keys(mirror).includes(key)
         mirror[key] = value
-        if (notNewKey) return
-        // if new key and vm.$forceUpdate is valid
+        // if new key and vm.$forceUpdate is valid, do update
         const vm = _storage._options.vueModule
-        if (vm && vm._isVue && vm.$forceUpdate) vm.$forceUpdate()
+        if (vm && vm.$forceUpdate) vm.$forceUpdate()
       }
     }
 
@@ -105,7 +106,7 @@ class Storage {
             const KEY_EXISTS = _notNull(value)
             // switch handle
             if (KEY_EXISTS && REAL_RESULT) {
-              return _storage._options.strict ? value : chainObject(value, key, keyChain)
+              return _storage._options.strict ? _parse(value) : chainObject(value, key, keyChain)
             } else if (KEY_EXISTS && !REAL_RESULT) {
               return chainObject(value, key, keyChain)
             } else if (!KEY_EXISTS) {
@@ -131,7 +132,8 @@ class Storage {
             __v_isReadonly: false,
             _type: 'proxy',
             _: storageObject,
-            _mirror: mirror
+            _mirror: mirror,
+            _interfaces: Object.keys(_storage)
           }
           if (key in prototypes) return prototypes[key]
 
@@ -146,10 +148,10 @@ class Storage {
             return chainObject({}, key)
           } else if (isResult) {
             // value not null and value is a string
-            return chainObject(target.get(key), key)
+            return _storage._options.strict ? _parse(value) : chainObject(target.get(key), key)
           } else if (!isResult) {
-            // value not null and value not a string
-            return value
+            // value not null and value not a result
+            return _parse(value)
           }
         },
         set: (target, key, value) => {
@@ -163,6 +165,8 @@ class Storage {
     const methods = {
       // rewrite functions of prototype ---------------------------------
       getItem (key, parse = true) {
+        if (!key) return
+
         const getValue = (_key) => {
           const originVal = getItem.call(this, _key)
           return parse ? _parse(originVal) : originVal
@@ -171,7 +175,7 @@ class Storage {
           key, newValue: value, oldValue: value
         })
         // multple key handle
-        if (key.constructor === Array) {
+        if (key && key.constructor === Array) {
           const value = key.reduce((acc, _key) => {
             acc[_key] = getValue(_key)
             return acc
@@ -186,7 +190,10 @@ class Storage {
         }
       },
 
-      setItem (key, value) {
+      setItem (key, value, parse = false) {
+        if (parse) value = _parse(value)
+        if (!key || !value) return
+
         const getValue = (_key) => _parse(getItem.call(this, _key))
         const setValue = (_key, _value) => setItem.call(this, _key, _stringify(_value))
         const setEvent = (newValue, oldValue) => {
@@ -203,9 +210,9 @@ class Storage {
           return object
         }
         // key is an object
-        if (key.constructor === Object) {
+        if (key && key.constructor === Object) {
           return objectHandle(key)
-        } else if (key.constructor === Array && value.constructor === Array) {
+        } else if ((key && key.constructor === Array) && (value && value.constructor === Array)) {
           // key is a list, value must be a list too
           return objectHandle(_zip(key, value))
         } else if (_typeCheck(key)) {
@@ -215,11 +222,11 @@ class Storage {
           setEvent(value, oldValue)
           return value
         }
-        _typeCheck(key)
-        return value
       },
 
       removeItem  (key, pop = false) {
+        if (!key) return
+
         const getValue = (_key) => _parse(getItem.call(this, _key))
         const remove = (_key) => removeItem.call(this, _key)
         const removeEvent = (oldValue) => {
@@ -227,7 +234,7 @@ class Storage {
           this._event(`${type}_${pop ? 'pop' : 'remove'}`, { key, newValue: null, oldValue })
         }
         // multple key handle
-        if (key.constructor === Array) {
+        if (key && key.constructor === Array) {
           const oldValue = key.reduce((acc, _key) => {
             acc[_key] = getValue(_key)
             remove(_key)
@@ -315,7 +322,7 @@ class Storage {
 
       // storage bind vueModule
       bindVm (vueModule) {
-        if (vueModule && vueModule._isVue) {
+        if (vueModule && vueModule.$forceUpdate) {
           _storage._options.vueModule = vueModule
           return
         }
@@ -432,7 +439,8 @@ class Storage {
         // prototypes
         const prototypes = {
           _storage: storage,
-          _prx: proxyStorage
+          _prx: proxyStorage,
+          _interfaces: Object.keys(_storage)
         }
         if (key in prototypes) return prototypes[key]
         if (key in _storage) return proxyStorage[key]
@@ -475,7 +483,7 @@ class Storage {
   }
 
   _zip (array1, array2) {
-    if (array1.constructor !== Array || array2.constructor !== Array) {
+    if ((array1 && array1.constructor !== Array) || (array1 && array2.constructor !== Array)) {
       throw new TypeError('all parameters must be array')
     } else if (array1.length !== array2.length) {
       throw new Error('the length of the two arrays must be equal')
