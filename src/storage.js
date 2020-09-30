@@ -48,6 +48,7 @@ class Storage {
     _storage._options = options
     _storage._type = type
     _storage._isStorage = true
+    _storage._vueModules = new Map()
 
     // storage object data
     const _data = () => Object.keys(storage).reduce((acc, key) => {
@@ -67,8 +68,10 @@ class Storage {
       const keyIsObject = key && key.constructor === Object
 
       const vueUpdate = () => {
-        const vm = _storage._options.vueModule
-        if (vm && vm.$forceUpdate) vm.$forceUpdate()
+        for (const vm of _storage._vueModules.values()) {
+          if (vm && vm.$forceUpdate) vm.$forceUpdate()
+          else _storage._vueModules.delete(vm)
+        }
       }
       // update mirror
       if (keyIsNull) {
@@ -341,10 +344,19 @@ class Storage {
       // storage bind vueModule
       bindVm (vueModule) {
         if (vueModule && vueModule.$forceUpdate) {
-          _storage._options.vueModule = vueModule
+          _storage._vueModules.set(vueModule._isVue ? vueModule._uid : vueModule.$.uid, vueModule)
           return
         }
         console.error('[storage error] bindVm: The provided parameter is not a vue module')
+      },
+
+      // storage unbind vueModule
+      unbindVm (vueModule) {
+        if (vueModule && vueModule.$forceUpdate) {
+          _storage._vueModules.delete(vueModule._isVue ? vueModule._uid : vueModule.$.uid)
+          return
+        }
+        console.error('[storage error] unbindVm: The provided parameter is not a vue module')
       },
 
       // storage object data
