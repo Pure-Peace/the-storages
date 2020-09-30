@@ -1,7 +1,7 @@
 {
   "name": "the-storages",
-  "version": "1.0.0",
-  "description": "An enhanced localstorage and sessionstorage plugin. Provide storage event monitoring and async/sync api.",
+  "version": "1.0.2",
+  "description": "Enhanced, Support data binding localStorage and sessionStorage. Provide storage event monitoring and async/sync api.",
   "repository": {
     "type": "git",
     "url": "https://github.com/pure-peace/the-storages"
@@ -18,7 +18,10 @@
     "storage",
     "listener",
     "event",
-    "async"
+    "async",
+    "data-binding",
+    "vue3",
+    "vue"
   ],
   "author": "Pure-Peace",
   "license": "MIT",
