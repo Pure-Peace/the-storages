@@ -1,6 +1,6 @@
 {
   "name": "the-storages",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Enhanced, support data binding localStorage and sessionStorage.  It allows two-way binding of storage data, multi-page data binding, storage event listener, and rich api (async/sync).",
   "repository": {
     "type": "git",
