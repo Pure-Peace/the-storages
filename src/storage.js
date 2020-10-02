@@ -189,7 +189,7 @@ class Storage {
           const originVal = getItem.call(this, _key)
           return parse ? _parse(originVal) : originVal
         }
-        const getEvent = (value) => this._event(`${type}_get`, {
+        const getEvent = (value) => this._event('get', {
           key, newValue: value, oldValue: value
         })
         // multple key handle
@@ -217,7 +217,7 @@ class Storage {
         const setValue = (_key, _value) => setItem.call(this, _key, _stringify(_value))
         const setEvent = (newValue, oldValue) => {
           _update(key, value)
-          this._event(`${type}_set`, { key, newValue, oldValue })
+          this._event('set', { key, newValue, oldValue })
         }
         const objectHandle = (object) => {
           const oldValue = Object.keys(object).reduce((acc, _key) => {
@@ -251,7 +251,7 @@ class Storage {
         const remove = (_key) => removeItem.call(this, _key)
         const removeEvent = (oldValue) => {
           _update(key)
-          this._event(`${type}_${pop ? 'pop' : 'remove'}`, { key, newValue: null, oldValue })
+          this._event(pop ? 'pop' : 'remove', { key, newValue: null, oldValue })
         }
         // multple key handle
         if (key && key.constructor === Array) {
@@ -274,7 +274,7 @@ class Storage {
       clear () {
         clear.call(this)
         _update()
-        this._event(`${type}_clear`, {
+        this._event('clear', {
           key: null, newValue: null, oldValue: null
         })
       },
@@ -328,10 +328,10 @@ class Storage {
       },
 
       // dispatch ACTIVE (current page trigger) event
-      _event (type, data) {
-        if (typeof this._active[type.split('_')[1]] === 'function') {
+      _event (eventType, data) {
+        if (typeof this._active[eventType] === 'function') {
           window.dispatchEvent(
-            Object.assign(new Event(type), { ...data, storageArea: storage, url: window.location.href })
+            Object.assign(new Event(`${type}_${eventType}`), { ...data, storageArea: storage, url: window.location.href })
           )
         }
       },
@@ -409,17 +409,17 @@ class Storage {
 
     // ACTIVE event handlers
     const activeEventHandlers = {
-      GetItem: e => _handle(e, 'get'),
-      SetItem: e => _handle(e, 'set'),
-      PopItem: e => _handle(e, 'pop'),
-      Clear: e => _handle(e, 'clear'),
-      RemoveItem: e => _handle(e, 'remove')
+      get: e => _handle(e, 'get'),
+      set: e => _handle(e, 'set'),
+      pop: e => _handle(e, 'pop'),
+      clear: e => _handle(e, 'clear'),
+      remove: e => _handle(e, 'remove')
     }
 
     // add ACTIVE (only valid for the current page) listeners & handlers
     for (const [eventType, handler] of Object.entries(activeEventHandlers)) {
-      window.removeEventListener(`${type}${eventType}`, handler)
-      window.addEventListener(`${type}${eventType}`, handler)
+      window.removeEventListener(`${type}_${eventType}`, handler)
+      window.addEventListener(`${type}_${eventType}`, handler)
     }
 
     // add PASSIVE (only triggered by other pages) listeners & handlers
